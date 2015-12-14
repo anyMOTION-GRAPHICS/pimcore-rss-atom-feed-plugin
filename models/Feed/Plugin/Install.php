@@ -8,38 +8,6 @@
  */
 class Feed_Plugin_Install {
 
-	/**
-	 * Add the required properties to the website settings.
-	 * The lastest version of Pimcore at this tim eis 1.4.8.
-	 * There is currently no API for saving website settings, so we must write to the XML-file manually.
-	 * This functionality might break in future versions.
-	 * Please check the status of this issue at the following page:
-	 * http://www.pimcore.org/issues/browse/PIMCORE-1842
-	*/
-	public static function addWebsiteSettings() {
-
-		//we need to write the website settings to the XML file manually because currently Pimcore has no API for this!
-		$websiteConfigPath = PIMCORE_CONFIGURATION_DIRECTORY . '/website.xml';
-		
-		$websiteConfig = new Zend_Config_Xml($websiteConfigPath, null, array('allowModifications' => true));
-		$pluginSettings = self::getSettingsConfig();
-
-		foreach($pluginSettings as $key => $value) {
-			if(!isset($websiteSettings->$key)) {
-				$websiteConfig->$key = $value;
-			}
-		}
-
-		$writer = new Zend_Config_Writer_Xml(array(
-			'config' => $websiteConfig,
-			'filename' => $websiteConfigPath
-		));
-		$writer->write();
-
-		//remove old settings from cache, forces a reload from the file system
-		Pimcore_Model_Cache::clearTags(array('output', 'system', 'website_config'));
-	}
-
 	public static function createStaticRoutes() {
 		$conf = self::getStaticRoutesConfig();
 		foreach($conf->routes->route as $def) {
@@ -84,10 +52,6 @@ class Feed_Plugin_Install {
 	}
 
 	protected static function getStaticRoutesConfig() {
-		return new Zend_Config_Xml(PIMCORE_PLUGINS_PATH.'/Feed/install/staticroutes.xml');		
-	}
-
-	protected static function getSettingsConfig() {
-		return new Zend_Config_Xml(PIMCORE_PLUGINS_PATH.'/Feed/install/website.xml');		
+		return new Zend_Config_Xml(PIMCORE_PLUGINS_PATH.'/Feed/install/staticroutes.xml');
 	}
 }

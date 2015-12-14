@@ -19,7 +19,6 @@ class Feed_Plugin extends Pimcore_API_Plugin_Abstract implements Pimcore_API_Plu
 	 */
 	public static function install() {
 		try {
-			Feed_Plugin_Install::addWebsiteSettings();
 			Feed_Plugin_Install::createStaticRoutes();
 		} catch(Exception $e) {
 			logger::crit($e);

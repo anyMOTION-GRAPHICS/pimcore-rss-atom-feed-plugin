@@ -1,50 +1,32 @@
-<?php 
+<?php
 
 /**
  * This controller uses Zend_Feed_Writer to generate ATOM and RSS feeds with the published documents of a Pimcore website.
 */
-class Feed_FeedController extends Website_Controller_Action {
+class Feed_FeedController extends Website\Controller\Action {
 
 	protected $defaultTitle;
 	protected $baseUrl;
 	protected $documentBody;
-	protected $limit = 25;
-	protected $description = '';
+	protected $limit = null;
+	protected $offset = null;
+	protected $path = '';
 	protected $author = '';
+	protected $description = '';
 
 	public function init() {
 		parent::init();
-		if($this->config->feedDefaultTitle) {
-			$this->defaultTitle = $this->config->feedDefaultTitle;
-		} else {
-			throw new Exception("No website setting with key 'feedDefaultTitle' found.");
-		}
 
-		if($this->config->feedBaseUrl) {
-			$this->baseUrl = $this->config->feedBaseUrl;
-		} else {
-			throw new Exception("No website setting with key 'feedBaseUrl' found.");
-		}
+		$this->path = $this->getParam('FeedPath');
+		$this->limit = $this->getParam('FeedLimit');
+		$this->offset = $this->getParam('FeedOffset');
 
-		if($this->config->feedDocumentBody) {
-			$this->documentBody = $this->config->feedDocumentBody;
-		} else {
-			throw new Exception("No website setting with key 'feedDocumentBody' found.");
-		}
+		$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+		$this->baseUrl = $protocol . $_SERVER['HTTP_HOST'];
 
-		if($this->config->feedLimit) {
-			$this->limit = $this->config->feedLimit;
-		} 
-
-		if($this->config->feedDescription) {
-			$this->description = $this->config->feedDescription;
-		}
-
-		if($this->config->feedAuthor) {
-			$this->author = $this->config->feedAuthor;
-		} else {
-			$this->author = 'unknown';
-		}
+		$this->author = $this->_getPropertyOrConfigValueByName('FeedAuthor');
+		$this->description = $this->_getPropertyOrConfigValueByName('FeedDescription');
+		$this->defaultTitle = $this->_getPropertyOrConfigValueByName('FeedDefaultTitle');
 	}
 
 	/**
@@ -52,13 +34,22 @@ class Feed_FeedController extends Website_Controller_Action {
 	 * @param int $limit Maximum number of documents to return. Default is 25.
 	 * @return object Document_List
 	*/
-	protected function getNewPages($limit = 25) {
+	protected function getPages($path, $limit = null, $offset = null) {
+		$list = new \Pimcore\Model\Document\Listing();
 
-		$list = new Document_List();
-		$list->setLimit($limit);
-		$list->setOrderKey('creationDate');
-		$list->setOrder('desc');
-		$list->setCondition("type='page'");
+		if ($path != null) {
+			$list->setCondition("type = 'page' AND path LIKE '". $path ."%'");
+		} else {
+			$list->setCondition("type = 'page'");
+		}
+
+		if ($limit != null) {
+			$list->setLimit($limit);
+		}
+		if ($offset != null) {
+			$list->setOffset($offset);
+		}
+
 		return $list->load();
 	}
 
@@ -66,13 +57,12 @@ class Feed_FeedController extends Website_Controller_Action {
 	 * Create an Atom feed.
 	*/
 	public function atomAction() {
-
-		$documents = $this->getNewPages($this->limit);
+		$documents = $this->getPages($this->path, $this->limit, $this->offset);
 
 		$feed = new Zend_Feed_Writer_Feed;
 		$feed->setTitle($this->defaultTitle);
 		$feed->setLink($this->baseUrl.'/');
-		$feed->setFeedLink($this->baseUrl.$_SERVER['REQUEST_URI'], 'atom');
+		$feed->setFeedLink($this->baseUrl . $_SERVER['REQUEST_URI'], 'atom');
 		$feed->setId($this->baseUrl);
 		$feed->addAuthor(array('name' => $this->author));
 
@@ -88,7 +78,7 @@ class Feed_FeedController extends Website_Controller_Action {
 				$modDate = $document->getModificationDate();
 			}
 
-			$content = trim(str_replace('&nbsp;', ' ', $document->elements[$this->documentBody]->text));
+			$content = trim(str_replace('&nbsp;', ' ', $document->getDescription()));
 			$descr = $document->getDescription();
 			$title = $document->title;
 			if(empty($title)) {
@@ -120,8 +110,7 @@ class Feed_FeedController extends Website_Controller_Action {
 	 * Create an RSS feed.
 	*/
 	public function rssAction() {
-
-		$documents = $this->getNewPages($limit);
+		$documents = $this->getPages($this->path, $this->limit, $this->offset);
 
 		$description = $this->description;
 
@@ -174,6 +163,24 @@ class Feed_FeedController extends Website_Controller_Action {
 		$this->getResponse()->setHeader('Content-Type', 'application/rss+xml; charset=utf-8');
 		echo $feed->export('rss');
 		exit();
+	}
+
+	private function _getPropertyOrConfigValueByName($configName, $throwException = true) {
+
+		if($this->config->get($configName) != null || $this->document->getProperty($configName) != null) {
+			if ($this->document->getProperty($configName) != null) {
+				return $this->document->getProperty($configName);
+			}
+
+			return $this->config->get($configName);
+
+		} else {
+			if ($throwException) {
+				throw new Exception('No website setting or document property with key "'. $configName .'" found.');
+			}
+			return null;
+		}
+
 	}
 
 }
